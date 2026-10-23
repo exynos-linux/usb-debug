@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=Duranium USB debug register console socket (TCP 23, USB interface only)
+Documentation=file:///usr/share/doc/duranium-usb-debug/README
+# The same console as the exynos-linux bring-up init (peek/poke/dump, cat/put,
+# insmod/rmmod, i2c, run, ulog, discard, reboot; usb-debug docs/PROTOCOL.md),
+# so the host tool (usb-debug cmd/put/get/shot...) works in the bring-up
+# Linux, the initrd and the booted system alike.
+# Off switch that also covers the initrd (whose presets cannot be changed at
+# runtime): add duranium.usb_debug=0 to the kernel command line.
+ConditionKernelCommandLine=!duranium.usb_debug=0
+DefaultDependencies=no
+# "systemctl stop|disable --now duranium-usb-debug.target" stops this too
+PartOf=duranium-usb-debug.target
+Conflicts=shutdown.target
+Before=shutdown.target
+After=duranium-usb-debug.service
+
+# Started in the initrd: keep listening across the switch-root isolate
+# (the parent target is IgnoreOnIsolate too, so nothing would restart it)
+IgnoreOnIsolate=yes
+
+[Socket]
+# The port is a setting (CONSOLE_PORT, duranium-usb-debug-generator).
+ListenStream=23
+BindToDevice=usb0
+BindIPv6Only=ipv6-only
+Accept=yes
+MaxConnections=8
+
+[Install]
+WantedBy=duranium-usb-debug.target

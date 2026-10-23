@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# In the mkosi initrd, bring up the debug network, the register console, the
+# shell and the kernel log stream so that early boot failures (before switch-root) are debuggable
+# over USB. sshd needs the real root and is not shipped in the initrd.
+enable duranium-usb-debug.target
+enable duranium-usb-debug.service
+enable duranium-debug-console.socket
+enable duranium-debug-shell.socket
+enable duranium-debug-klog.socket

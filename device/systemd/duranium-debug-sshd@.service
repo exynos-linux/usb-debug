@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=Duranium USB debug SSH session (per-connection)
+Documentation=file:///usr/share/doc/duranium-usb-debug/README
+
+[Service]
+# A dedicated sshd in inetd mode, separate from any system sshd, with its own
+# host key under /etc/duranium-usb-debug. Root login needs a password or key:
+# empty passwords are refused (the telnet console needs neither).
+ExecStart=-/usr/libexec/duranium/usb-debug-sshd
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal

@@ -1,0 +1,74 @@
+# A tag vX.Y.Z (matching VERSION) runs the whole CI, then publishes the
+# GitHub release: the source tarball, the APKBUILD with its checksum, the
+# aarch64 binaries, setup.sh and SHA256SUMS (docs/RELEASING.md).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tag matches VERSION
+        run: |
+          [ "v$(cat VERSION)" = "$GITHUB_REF_NAME" ] ||
+            { echo "::error::tag $GITHUB_REF_NAME but VERSION $(cat VERSION)"; exit 1; }
+          grep -q "^## $(cat VERSION)" CHANGELOG.md ||
+            { echo "::error::no CHANGELOG.md section for $(cat VERSION)"; exit 1; }
+
+  ci:
+    needs: check
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: ci
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
+        with:
+          name: dist
+          path: in/dist
+      - uses: actions/download-artifact@v7
+        with:
+          name: aarch64-binaries
+          path: in/bin
+      - uses: actions/download-artifact@v7
+        with:
+          name: apk-ubuntu-24.04
+          path: in/apk
+      - name: Assemble
+        run: |
+          set -eu
+          v=$(cat VERSION)
+          mkdir rel
+          cp "in/dist/usb-debug-$v.tar.gz" rel/
+          cp in/apk/APKBUILD rel/APKBUILD
+          grep -q "  usb-debug-$v.tar.gz" rel/APKBUILD
+          if grep -q SKIP rel/APKBUILD; then echo "::error::APKBUILD without a checksum"; exit 1; fi
+          cp in/bin/uinput-type-aarch64 in/bin/usb-debug-console-aarch64 rel/
+          sed "s/^VERSION=@VERSION@/VERSION=$v/" setup.sh > rel/setup.sh
+          grep -q "^VERSION=$v" rel/setup.sh
+          (cd rel && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
+          awk -v v="## $v" '$0 ~ "^## " { p = index($0, v) == 1; next } p' CHANGELOG.md > notes.md
+          cat >> notes.md <<EOF
+
+          Install or update the host tool:
+
+              curl -fsSL https://github.com/$GITHUB_REPOSITORY/releases/download/v$v/setup.sh | sh
+
+          Device repositories: pin \`$v\` in \`.usb-debug-version\` and vendor the attached
+          \`APKBUILD\` (docs/MIGRATION.md).
+          EOF
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" rel/* --title "usb-debug $(cat VERSION)" --notes-file notes.md --verify-tag

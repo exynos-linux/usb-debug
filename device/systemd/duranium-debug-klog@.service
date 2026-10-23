@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=Duranium USB debug kernel log stream (per-connection)
+Documentation=file:///usr/share/doc/duranium-usb-debug/README
+DefaultDependencies=no
+Conflicts=shutdown.target
+Before=shutdown.target
+
+[Service]
+# The whole kernel ring buffer, then a live follow. util-linux "dmesg -w"
+# when available; busybox dmesg has no follow mode, so fall back to the raw
+# /dev/kmsg records (one "prio,seq,usec,-;message" line each).
+ExecStart=/bin/sh -c 'dmesg -w 2>/dev/null || exec cat /dev/kmsg'
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal

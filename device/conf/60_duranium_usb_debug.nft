@@ -1,0 +1,12 @@
+#!/usr/sbin/nft -f
+
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Allow the Duranium USB debug layer only on the USB network interface:
+# register console (23), root shell (2323), ssh (22), kernel log stream (24).
+# Never on Wi-Fi or any routable link. A device that moves the ports
+# (usb-debug-config) ships its own rule.
+table inet filter {
+	chain input {
+		iifname "usb*" tcp dport { 22, 23, 24, 2323 } accept comment "duranium-usb-debug"
+	}
+}

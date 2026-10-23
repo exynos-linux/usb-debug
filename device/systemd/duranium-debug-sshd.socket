@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=Duranium USB debug SSH socket (TCP 22, USB interface only)
+Documentation=file:///usr/share/doc/duranium-usb-debug/README
+# Off switch that also covers the initrd (whose presets cannot be changed at
+# runtime): add duranium.usb_debug=0 to the kernel command line.
+ConditionKernelCommandLine=!duranium.usb_debug=0
+DefaultDependencies=no
+# "systemctl stop|disable --now duranium-usb-debug.target" stops this too
+PartOf=duranium-usb-debug.target
+Conflicts=shutdown.target
+Before=shutdown.target
+After=duranium-usb-debug.service
+# sshd and its host key need the real root (not in the initrd).
+ConditionPathExists=!/etc/initrd-release
+
+[Socket]
+# Socket activation instead of a listening sshd: an sshd bound to the
+# link-local address would fail to start before the link has carrier.
+ListenStream=22
+BindToDevice=usb0
+BindIPv6Only=ipv6-only
+Accept=yes
+MaxConnections=8
+
+[Install]
+WantedBy=duranium-usb-debug.target

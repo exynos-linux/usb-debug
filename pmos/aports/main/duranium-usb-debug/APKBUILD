@@ -1,0 +1,93 @@
+# The USB debug layer of development images: a USB NCM gadget with a
+# register console, a root shell, ssh and the kernel log over it, in the
+# initrd and the booted system. Device-agnostic: a device package configures
+# it with /usr/lib/duranium-usb-debug/conf.d/<device>.conf (UDC, ports).
+# Release images leave the whole package out.
+#
+# Upstream: https://github.com/exynos-linux/usb-debug. Each release attaches
+# this file with its checksum filled in; device repositories vendor that
+# copy (pinned by pkgver). Candidate for upstream pmaports.
+maintainer="dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>"
+pkgname=duranium-usb-debug
+pkgver=1.0.0
+pkgrel=0
+pkgdesc="Development USB debug layer: NCM gadget, register console, root shell, ssh, kernel log"
+url="https://github.com/exynos-linux/usb-debug"
+arch="all"
+license="GPL-2.0-only AND GPL-3.0-or-later"
+# The -initramfs subpackage carries the gadget setup and the consoles, which
+# the booted system needs too, hence the hard dependency on it.
+# busybox-extras: telnetd; openssh-server (sshd -i) + openssh-keygen.
+depends="
+	$pkgname-initramfs=$pkgver-r$pkgrel
+	busybox-extras
+	iproute2
+	kmod
+	openssh-server
+	openssh-keygen
+	"
+makedepends="linux-headers"
+subpackages="$pkgname-initramfs:initramfs $pkgname-adb:adb:noarch"
+source="https://github.com/exynos-linux/usb-debug/releases/download/v$pkgver/usb-debug-$pkgver.tar.gz"
+builddir="$srcdir/usb-debug-$pkgver"
+# The tests need python3 and a TCP loopback; the upstream CI runs them
+# (make check). Device repositories cross-build this package.
+options="!check"
+
+build() {
+	make console O=build CFLAGS="$CFLAGS -static" LDFLAGS="$LDFLAGS"
+	${CROSS_COMPILE:-}strip build/usb-debug-console
+}
+
+package() {
+	make install-device O=build DESTDIR="$pkgdir"
+}
+
+# What must already exist in the initrd: the NCM interface, the register
+# console, the telnet shell and the kernel log stream, so pre-switch-root
+# failures are debuggable over USB.
+initramfs() {
+	pkgdesc="$pkgdesc (initramfs)"
+	depends="busybox-extras iproute2 kmod"
+
+	amove usr/libexec/duranium/usb-debug-config
+	amove usr/libexec/duranium/usb-debug-console
+	amove usr/libexec/duranium/usb-debug-gadget-setup
+	amove usr/libexec/duranium/usb-debug-gadget-teardown
+	amove usr/lib/systemd/system-generators/duranium-usb-debug-generator
+	amove usr/lib/duranium-usb-debug/conf.d
+	amove usr/lib/systemd/system/duranium-usb-debug.target
+	amove usr/lib/systemd/system/duranium-usb-debug.service
+	amove usr/lib/systemd/system/duranium-debug-console.socket
+	amove usr/lib/systemd/system/duranium-debug-console@.service
+	amove usr/lib/systemd/system/duranium-debug-shell.socket
+	amove usr/lib/systemd/system/duranium-debug-shell@.service
+	amove usr/lib/systemd/system/duranium-debug-klog.socket
+	amove usr/lib/systemd/system/duranium-debug-klog@.service
+	# unit files only (sshd itself is not in the initrd; the socket has
+	# ConditionPathExists=!/etc/initrd-release), so that the target's Also=
+	# list resolves in both the initrd and the booted system
+	amove usr/lib/systemd/system/duranium-debug-sshd.socket
+	amove usr/lib/systemd/system/duranium-debug-sshd@.service
+	amove usr/lib/systemd/network/10-duranium-usb-debug.link
+	amove usr/lib/udev/rules.d/90-duranium-usb-debug-sockets.rules
+	amove usr/lib/systemd/system.conf.d/40-duranium-usb-debug.conf
+	amove usr/lib/systemd/initrd-preset/80-duranium-usb-debug.preset
+}
+
+# adb on the debug gadget: adbd (~30 MB with its runtime) lives only in the
+# booted system, never in the initrd. It attaches an adb FunctionFS function
+# next to NCM ("adb shell", "adb push").
+adb() {
+	pkgdesc="$pkgdesc (adb function)"
+	depends="$pkgname=$pkgver-r$pkgrel adbd"
+
+	amove usr/libexec/duranium/usb-debug-adb-attach
+	amove usr/lib/systemd/system/duranium-debug-adb.service
+	amove usr/lib/systemd/system/duranium-debug-adbd.service
+	amove usr/lib/systemd/system-preset/80-duranium-usb-debug-adb.preset
+}
+
+sha512sums="
+SKIP  usb-debug-1.0.0.tar.gz
+"

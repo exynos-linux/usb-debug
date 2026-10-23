@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=Duranium USB debug layer (network + console + ssh + kernel log)
+Documentation=file:///usr/share/doc/duranium-usb-debug/README
+# Pulled in from sysinit.target so the layer is up early, in the initrd and on
+# the host. No default dependencies: nothing in the normal boot waits for it,
+# so a missing USB link never delays the boot.
+DefaultDependencies=no
+Conflicts=shutdown.target
+Before=shutdown.target
+# Survive the initrd -> host switch-root (isolate), or PartOf= would stop the
+# gadget service with it and drop the USB link.
+IgnoreOnIsolate=yes
+
+[Install]
+WantedBy=sysinit.target
+# One switch for the whole layer: "systemctl disable duranium-usb-debug.target"
+# also disables every unit listed here (and "enable" enables them again).
+Also=duranium-usb-debug.service
+Also=duranium-debug-console.socket
+Also=duranium-debug-shell.socket
+Also=duranium-debug-sshd.socket
+Also=duranium-debug-klog.socket

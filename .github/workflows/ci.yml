@@ -1,0 +1,149 @@
+# Lint, test, cross-build and package on every push and pull request.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  # the kernel whose nolibc and UAPI headers build the init
+  LINUX_TAG: v7.3
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Versions agree
+        run: |
+          v=$(cat VERSION)
+          a=$(sed -n 's/^pkgver=//p' pmos/aports/main/duranium-usb-debug/APKBUILD)
+          [ "$v" = "$a" ] || { echo "::error::VERSION $v but APKBUILD pkgver $a"; exit 1; }
+          grep -q "usb-debug-$v.tar.gz" pmos/aports/main/duranium-usb-debug/APKBUILD
+      - name: shellcheck
+        run: shellcheck -s sh setup.sh contrib/device-shim.sh device/libexec/* device/generator/*
+      - name: Python
+        run: python3 -m py_compile host/usb-debug host/usb_debug/*.py tests/*.py
+
+  linux:
+    # nolibc + UAPI headers (x86_64 for the init test, arm64 for the device)
+    runs-on: ubuntu-24.04
+    steps:
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: linux-hdr
+          key: linux-hdr-${{ env.LINUX_TAG }}
+      - if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          git clone -q --depth 1 --branch "$LINUX_TAG" https://github.com/torvalds/linux.git linux
+          for a in x86 arm64; do
+            make -s -C linux ARCH=$a INSTALL_HDR_PATH="$PWD/linux-hdr/$a" headers_install
+          done
+          cp -r linux/tools/include/nolibc linux-hdr/nolibc
+      - uses: actions/upload-artifact@v6
+        with:
+          name: linux-hdr
+          path: linux-hdr
+          retention-days: 3
+
+  test:
+    needs: linux
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
+        with:
+          name: linux-hdr
+          path: linux-hdr
+      - name: make check (console, host tool, device scripts, nolibc init)
+        run: make check
+        env:
+          NOLIBC: ${{ github.workspace }}/linux-hdr/nolibc
+          KHDR: ${{ github.workspace }}/linux-hdr/x86/include
+
+  cross:
+    needs: linux
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
+        with:
+          name: linux-hdr
+          path: linux-hdr
+      - name: Toolchain
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libc6-dev-arm64-cross
+      - name: Build the aarch64 binaries
+        run: |
+          set -eu
+          n=$PWD/linux-hdr/nolibc h=$PWD/linux-hdr/arm64/include o=$PWD/out
+          make -C console init BOARDS=gtactive3wifi O="$o/init-gtactive3wifi" \
+            CROSS_COMPILE=aarch64-linux-gnu- NOLIBC="$n" KHDR="$h"
+          make -C console init O="$o/init-all" CROSS_COMPILE=aarch64-linux-gnu- NOLIBC="$n" KHDR="$h"
+          make -C console uinput-type O="$o" CROSS_COMPILE=aarch64-linux-gnu- NOLIBC="$n" KHDR="$h"
+          make -C console console O="$o" CROSS_COMPILE=aarch64-linux-gnu- CFLAGS=-static
+          aarch64-linux-gnu-strip out/usb-debug-console
+          file out/init-*/init out/uinput-type out/usb-debug-console
+          mkdir -p dist
+          cp out/uinput-type dist/uinput-type-aarch64
+          cp out/usb-debug-console dist/usb-debug-console-aarch64
+      - uses: actions/upload-artifact@v6
+        with:
+          name: aarch64-binaries
+          path: dist
+          retention-days: 14
+
+  dist:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: make dist O=dist
+      - uses: actions/upload-artifact@v6
+        with:
+          name: dist
+          path: dist/usb-debug-*.tar.gz
+          retention-days: 14
+
+  aport:
+    # abuild on Alpine edge, natively on both architectures (docker: the
+    # JavaScript actions do not run inside an Alpine container on arm64)
+    needs: dist
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
+        with:
+          name: dist
+          path: dist
+      - name: abuild
+        run: |
+          docker run --rm -v "$PWD:/w" -w /w alpine:edge sh -euxc '
+            apk add -q alpine-sdk sudo
+            adduser -D builder && addgroup builder abuild
+            echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
+            mkdir -p /var/cache/distfiles && chmod 777 /var/cache/distfiles
+            cp dist/usb-debug-*.tar.gz /var/cache/distfiles/
+            cp -r pmos/aports/main/duranium-usb-debug /home/builder/aport
+            chown -R builder /home/builder/aport
+            su builder -c "abuild-keygen -a -i -n -q && cd ~/aport && abuild checksum && abuild -r"
+            mkdir -p /w/apk && cp -r /home/builder/packages/* /w/apk/
+            # the APKBUILD with the checksum of this tarball, for the release
+            cp /home/builder/aport/APKBUILD /w/apk/APKBUILD
+            for f in $(find /home/builder/packages -name "*.apk"); do echo "== $f"; tar -tzf "$f" 2>/dev/null | grep -v "^\." ; done
+          '
+      - uses: actions/upload-artifact@v6
+        with:
+          name: apk-${{ matrix.runner }}
+          path: apk
+          retention-days: 14

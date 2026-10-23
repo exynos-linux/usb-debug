@@ -1,0 +1,32 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# systemd generator of the USB debug layer: applies the ports from its
+# settings (usb-debug-config: CONSOLE_PORT, SHELL_PORT, SSH_PORT, KLOG_PORT)
+# to the debug sockets, in the initrd and in the booted system. A port that
+# differs from the unit's default gets a drop-in; port 0 masks that socket.
+# With no settings it writes nothing, so the units are used as shipped.
+#
+# Arguments (systemd.generator(7)): normal-dir early-dir late-dir
+normal=${1:-/run/systemd/generator}
+early=${2:-$normal}
+
+# shellcheck source=/dev/null
+. "${USBDBG_LIBEXEC:-/usr/libexec/duranium}"/usb-debug-config 2>/dev/null || exit 0
+usbdbg_load 2>/dev/null || exit 0
+
+port() {	# unit wanted default
+	case $2 in
+		"$3") return 0 ;;
+		'' | *[!0-9]*) echo "duranium-usb-debug-generator: bad port '$2' for $1" >&2; return 0 ;;
+		0) mkdir -p "$early" && ln -sf /dev/null "$early/$1"; return 0 ;;
+	esac
+	mkdir -p "$normal/$1.d"
+	printf '# from the duranium-usb-debug settings (duranium-usb-debug-generator)\n[Socket]\nListenStream=\nListenStream=%s\n' \
+		"$2" > "$normal/$1.d/50-port.conf"
+}
+
+port duranium-debug-console.socket "$CONSOLE_PORT" 23
+port duranium-debug-shell.socket "$SHELL_PORT" 2323
+port duranium-debug-sshd.socket "$SSH_PORT" 22
+port duranium-debug-klog.socket "$KLOG_PORT" 24
+exit 0

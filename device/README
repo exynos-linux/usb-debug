@@ -1,0 +1,80 @@
+Duranium USB debug layer (duranium-usb-debug)
+=============================================
+
+What it is
+----------
+A development-only debug layer for postmarketOS (Duranium) images, from
+https://github.com/exynos-linux/usb-debug. It brings up a USB NCM network
+interface and exposes, over that interface only:
+
+  * register console on TCP 23   -> usb-debug-console: peek/poke/dump, cat,
+                                    put, run, insmod, i2c, reboot ... (the
+                                    same console as the exynos-linux
+                                    bring-up init; docs/PROTOCOL.md)
+  * root shell on TCP 2323       -> busybox "telnetd -l /bin/sh" (no auth)
+  * ssh on TCP 22                -> a dedicated sshd (its own host key)
+  * kernel log on TCP 24         -> "dmesg -w", or /dev/kmsg without util-linux
+  * adb (duranium-usb-debug-adb) -> adbd on FunctionFS: adb shell/push/pull
+
+Fixed addressing, the same on every device and in the bring-up init, so
+the host tool works unchanged:
+
+  * gadget VID:PID 0x1d6b:0x0104
+  * device MAC 02:57:0a:00:00:01  -> device link-local  fe80::57:aff:fe00:1
+  * host   MAC 02:57:0a:00:00:02  -> host link-local     fe80::57:aff:fe00:2
+
+Host usage: the "usb-debug" command (same repository), or by hand
+(replace usb0 with the host's cdc_ncm interface):
+
+  usb-debug cmd dmesg                    # register console command
+  usb-debug shell                        # root shell
+  nc  fe80::57:aff:fe00:1%usb0 2323      # the same, raw
+  nc  fe80::57:aff:fe00:1%usb0 24 | less # kernel log
+  ssh root@fe80::57:aff:fe00:1%usb0      # needs a root key or password first
+
+All of them are socket-activated (systemd .socket units with Accept=yes),
+listening on the wildcard address but bound to the gadget interface with
+SO_BINDTODEVICE (BindToDevice=usb0). That works before the link has carrier
+and before IPv6 duplicate address detection finished, which binding the
+link-local address directly does not.
+
+It is present both in the initrd (interface, console, shell and kernel log;
+-initramfs subpackage) and in the booted system (adds sshd, which needs the
+real root). The gadget stays bound across switch-root.
+
+Settings
+--------
+KEY=value files in /usr/lib/duranium-usb-debug/conf.d/ (device packages)
+and /etc/duranium-usb-debug/conf.d/ (local admin): the USB device controller
+(UDC=), the ports (CONSOLE_PORT=, SHELL_PORT=, SSH_PORT=, KLOG_PORT=; 0 turns
+a service off) and the gadget's USB strings. See usb-debug.conf.example in
+this directory. duranium-usb-debug-generator applies the ports at boot.
+
+SECURITY
+--------
+This is an UNAUTHENTICATED root shell and register console, and an SSH
+daemon that permits root login, reachable by anyone who can attach to the
+USB port. It is for development images only. It listens on the USB gadget
+interface only and the firewall (60_duranium_usb_debug.nft) only opens its
+ports on usb*, but USB access is physical root access regardless. Do not
+ship it in a release image.
+
+How to disable it
+-----------------
+Booted system, whole layer off (the target's Also= list covers every unit):
+    systemctl disable --now duranium-usb-debug.target
+Permanently, so a preset cannot re-enable it:
+    systemctl mask duranium-usb-debug.target duranium-usb-debug.service \
+        duranium-debug-console.socket duranium-debug-shell.socket \
+        duranium-debug-sshd.socket duranium-debug-klog.socket
+Just one piece, e.g. keep the interface but drop the shell:
+    systemctl disable --now duranium-debug-shell.socket
+The initrd's units come from presets baked into the UKI and cannot be
+disabled at runtime; the kernel command line switch covers the initrd and the
+booted system alike:
+    duranium.usb_debug=0
+
+Release images
+--------------
+This layer is a SEPARATE package. A release image is built without it (no
+duranium-usb-debug in the image's package list), so no masking is needed.

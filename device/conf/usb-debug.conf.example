@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Settings of the USB debug layer (duranium-usb-debug). A device package
+# installs its own as /usr/lib/duranium-usb-debug/conf.d/<device>.conf; the
+# local admin may add /etc/duranium-usb-debug/conf.d/*.conf (read last).
+# KEY=value lines, no shell code. Everything is optional: the values below
+# are the defaults.
+
+# USB device controller: a name or shell glob from /sys/class/udc
+# (e.g. 10c00000.dwc3 or *.dwc3); empty = the first one. The kernel
+# command line can override it: duranium.usb_debug.udc=NAME
+UDC=
+# Seconds to wait for it (deferred probing)
+UDC_WAIT=10
+
+# TCP ports on the USB interface (0 = that service off). The host tool
+# reads the same values from the device repository's config.toml
+# ([console] port, shell_port), so change both together.
+CONSOLE_PORT=23
+SHELL_PORT=2323
+SSH_PORT=22
+KLOG_PORT=24
+
+# USB strings of the gadget. Empty PRODUCT = "Duranium Debug (<DT model>)",
+# empty SERIAL = "<DT compatible device>-duranium-debug".
+MANUFACTURER=postmarketOS
+PRODUCT=
+SERIAL=

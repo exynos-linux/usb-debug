@@ -1,0 +1,20 @@
+root = true
+
+[*]
+end_of_line = lf
+insert_final_newline = true
+charset = utf-8
+
+[*.{c,h,sh}]
+indent_style = tab
+
+[{Makefile,*/Makefile}]
+indent_style = tab
+
+[*.py]
+indent_style = space
+indent_size = 4
+
+[*.{yml,md}]
+indent_style = space
+indent_size = 2

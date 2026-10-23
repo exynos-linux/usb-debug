@@ -1,0 +1,12 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Generate the dedicated USB-debug sshd host key on first use. Kept under
+# /etc (mutable via the confext overlay) so it survives reboots but is not
+# baked into the immutable image.
+set -eu
+dir=${USBDBG_ROOT:-}/etc/duranium-usb-debug
+key="$dir/ssh_host_ed25519_key"
+mkdir -p "$dir"
+if [ ! -f "$key" ]; then
+	ssh-keygen -q -t ed25519 -N "" -f "$key" -C "duranium-usb-debug"
+fi

@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=Duranium USB debug network interface
+Documentation=file:///usr/share/doc/duranium-usb-debug/README
+# Off switch that also covers the initrd (whose presets cannot be changed at
+# runtime): add duranium.usb_debug=0 to the kernel command line.
+ConditionKernelCommandLine=!duranium.usb_debug=0
+DefaultDependencies=no
+# "systemctl stop|disable --now duranium-usb-debug.target" stops this too
+PartOf=duranium-usb-debug.target
+Conflicts=shutdown.target
+Before=shutdown.target
+After=systemd-modules-load.service sys-kernel-config.mount
+Wants=sys-kernel-config.mount
+# Keep the gadget bound across the initrd -> host switch-root (isolating
+# initrd-switch-root.target would otherwise stop this unit and unbind it).
+IgnoreOnIsolate=yes
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/duranium/usb-debug-gadget-setup
+ExecStop=/usr/libexec/duranium/usb-debug-gadget-teardown
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=60
+
+[Install]
+WantedBy=duranium-usb-debug.target

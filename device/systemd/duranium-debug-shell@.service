@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=Duranium USB debug console (per-connection)
+Documentation=file:///usr/share/doc/duranium-usb-debug/README
+DefaultDependencies=no
+Conflicts=shutdown.target
+Before=shutdown.target
+
+[Service]
+# One busybox telnetd per accepted connection, wired to the socket on
+# stdin/stdout (Accept=yes). Same mechanism as Duranium's own initramfs debug
+# shell (postmarketos-duranium initramfs-telnetd.service, which runs
+# "telnetd -l /bin/sh"). This is an unauthenticated root console reachable
+# only over the USB gadget interface; see README for the security
+# implications and how to disable it.
+ExecStart=-/usr/sbin/telnetd -i -l /bin/sh
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal

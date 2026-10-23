@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Keep the debug NCM interface named usb0 (the sockets bind to that name)
+# and keep its fixed MAC, from which the stable link-local address
+# fe80::57:aff:fe00:1 is derived.
+[Match]
+MACAddress=02:57:0a:00:00:01
+
+[Link]
+NamePolicy=
+Name=usb0
+MACAddressPolicy=none

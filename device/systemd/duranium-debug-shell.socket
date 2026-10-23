@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=Duranium USB debug root shell socket (TCP 2323, USB interface only)
+Documentation=file:///usr/share/doc/duranium-usb-debug/README
+# Off switch that also covers the initrd (whose presets cannot be changed at
+# runtime): add duranium.usb_debug=0 to the kernel command line.
+ConditionKernelCommandLine=!duranium.usb_debug=0
+# No default dependencies: sockets.target must not wait for a USB link that
+# may never come up.
+DefaultDependencies=no
+# "systemctl stop|disable --now duranium-usb-debug.target" stops this too
+PartOf=duranium-usb-debug.target
+Conflicts=shutdown.target
+Before=shutdown.target
+After=duranium-usb-debug.service
+
+# Started in the initrd: keep listening across the switch-root isolate
+# (the parent target is IgnoreOnIsolate too, so nothing would restart it)
+IgnoreOnIsolate=yes
+
+[Socket]
+# A plain root shell (telnet). TCP 23 is the register console
+# (duranium-debug-console.socket). The port is a setting (SHELL_PORT,
+# duranium-usb-debug-generator). Bound to the wildcard address but restricted to the
+# gadget interface with SO_BINDTODEVICE: binding the link-local address itself
+# fails until the NCM link has carrier and IPv6 DAD finished. BindToDevice=
+# also orders the socket after sys-subsystem-net-devices-usb0.device.
+ListenStream=2323
+BindToDevice=usb0
+BindIPv6Only=ipv6-only
+Accept=yes
+MaxConnections=4
+
+[Install]
+WantedBy=duranium-usb-debug.target

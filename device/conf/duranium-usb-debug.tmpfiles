@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# The firewall rule, for images whose /etc does not take package files
+# (a Duranium confext): postmarketos-config-nftables reads /etc/nftables.d.
+L /etc/nftables.d/60_duranium_usb_debug.nft - - - - /usr/share/nftables.avail/60_duranium_usb_debug.nft

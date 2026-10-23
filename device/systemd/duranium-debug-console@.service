@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=Duranium USB debug register console (per connection)
+Documentation=file:///usr/share/doc/duranium-usb-debug/README
+DefaultDependencies=no
+Conflicts=shutdown.target
+Before=shutdown.target
+
+[Service]
+# Unauthenticated root access to registers and block devices, reachable only
+# over the USB debug interface: development images only. The device it runs
+# on comes from the device tree (usbdbg.board=NAME overrides it).
+ExecStart=-/usr/libexec/duranium/usb-debug-console
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal

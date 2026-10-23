@@ -1,0 +1,12 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# One SSH session of the USB debug layer (duranium-debug-sshd@.service):
+# a dedicated sshd in inetd mode with its own host key. The configuration is
+# /etc/duranium-usb-debug/sshd_config when the admin made one, else the
+# packaged default in /usr (package files under /etc may not reach a
+# Duranium image, whose /etc is a confext).
+set -eu
+/usr/libexec/duranium/usb-debug-sshd-keygen
+cfg=/etc/duranium-usb-debug/sshd_config
+[ -f "$cfg" ] || cfg=/usr/share/duranium-usb-debug/sshd_config
+exec /usr/sbin/sshd -i -f "$cfg"

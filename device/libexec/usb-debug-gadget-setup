@@ -1,0 +1,92 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Bring up the USB debug NCM network interface. Same VID/PID and fixed MAC
+# addresses as the exynos-linux bring-up init (usb-debug console/core.c,
+# setup_gadget/ifup), so the device keeps the IPv6 link-local
+# fe80::57:aff:fe00:1 and the host keeps fe80::57:aff:fe00:2 across reboots
+# and the host tool (usb-debug) works the same in both.
+#
+# Settings (UDC, USB strings): usb-debug-config. Device-specific preparation
+# (e.g. clock gates or a USB data switch that must be set before the
+# controller probes) is the device package's job and is ordered before this
+# unit (Before=duranium-usb-debug.service).
+set -eu
+
+# shellcheck source=/dev/null
+. "$(dirname "$0")"/usb-debug-config
+usbdbg_load
+
+R=${USBDBG_ROOT:-}
+CONFIGFS=$R/sys/kernel/config
+GADGET=$CONFIGFS/usb_gadget/g_debug
+HOST_MAC="02:57:0a:00:00:02"
+DEV_MAC="02:57:0a:00:00:01"
+
+# The UDC appears asynchronously once the controller has probed (deferred
+# probing, PHY first), so wait for it like the bring-up init does
+udc=
+i=0
+while [ $i -lt $((UDC_WAIT * 10)) ]; do
+	udc=$(usbdbg_udc) && break
+	sleep 0.1
+	i=$((i + 1))
+done
+if [ -z "$udc" ]; then
+	echo "duranium-usb-debug: no UDC${UDC:+ matching $UDC} after $UDC_WAIT s, skipping"
+	exit 0
+fi
+
+modprobe libcomposite 2>/dev/null || true
+if ! mountpoint -q "$CONFIGFS"; then
+	mount -t configfs none "$CONFIGFS"
+fi
+
+# Already configured (e.g. carried over from the initrd): nothing to do
+if [ -e "$GADGET/UDC" ] && [ -n "$(cat "$GADGET/UDC" 2>/dev/null)" ]; then
+	exit 0
+fi
+
+model=$(usbdbg_model)
+compat=$(usbdbg_compatible)
+dev=${compat#*,}
+[ -n "$PRODUCT" ] || PRODUCT="Duranium Debug${model:+ ($model)}"
+[ -n "$SERIAL" ] || SERIAL="${dev:-usb-debug}-duranium-debug"
+
+mkdir -p "$GADGET"
+echo 0x1d6b > "$GADGET/idVendor"	# Linux Foundation
+echo 0x0104 > "$GADGET/idProduct"	# Multifunction composite gadget
+echo 0x0200 > "$GADGET/bcdUSB"
+mkdir -p "$GADGET/strings/0x409"
+echo "$MANUFACTURER" > "$GADGET/strings/0x409/manufacturer"
+echo "$PRODUCT"      > "$GADGET/strings/0x409/product"
+echo "$SERIAL"       > "$GADGET/strings/0x409/serialnumber"
+
+mkdir -p "$GADGET/functions/ncm.usb0"
+echo "$HOST_MAC" > "$GADGET/functions/ncm.usb0/host_addr"
+echo "$DEV_MAC"  > "$GADGET/functions/ncm.usb0/dev_addr"
+
+mkdir -p "$GADGET/configs/c.1/strings/0x409"
+echo "Debug NCM" > "$GADGET/configs/c.1/strings/0x409/configuration"
+ln -sf "$GADGET/functions/ncm.usb0" "$GADGET/configs/c.1/"
+
+if ! echo "$udc" > "$GADGET/UDC"; then
+	# e.g. another gadget (Duranium's rescue gadget g1) already owns the UDC
+	echo "duranium-usb-debug: cannot bind $udc (busy?)"
+	exit 1
+fi
+
+# Wait for the interface, then bring it up. The fixed MAC gives the stable
+# fe80:: link-local address that matches the bring-up console.
+iface=""
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+	iface=$(cat "$GADGET/functions/ncm.usb0/ifname" 2>/dev/null || true)
+	[ -n "$iface" ] && break
+	sleep 0.1
+done
+if [ -z "$iface" ]; then
+	echo "duranium-usb-debug: gadget interface did not appear"
+	exit 1
+fi
+ip link set "$iface" up
+echo "$iface" > "$R/run/duranium-usb-debug.iface"
+echo "duranium-usb-debug: up on $iface via $udc (fe80::57:aff:fe00:1)"

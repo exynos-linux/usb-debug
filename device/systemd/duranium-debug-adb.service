@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=Duranium USB debug layer: adb function on the debug gadget
+Documentation=file:///usr/share/doc/duranium-usb-debug/README
+ConditionKernelCommandLine=!duranium.usb_debug=0
+ConditionKernelCommandLine=!duranium.usb_debug_adb=0
+PartOf=duranium-usb-debug.target
+After=duranium-usb-debug.service
+Requires=duranium-usb-debug.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/duranium/usb-debug-adb-attach
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=30
+
+[Install]
+WantedBy=duranium-usb-debug.target

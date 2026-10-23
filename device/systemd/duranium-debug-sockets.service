@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=Duranium USB debug layer: (re)start the debug sockets in the booted system
+Documentation=file:///usr/share/doc/duranium-usb-debug/README
+ConditionKernelCommandLine=!duranium.usb_debug=0
+ConditionPathExists=!/etc/initrd-release
+# The register console, the telnet shell and the kernel log stream start in
+# the initrd; make sure they listen after switch-root as well.
+After=duranium-usb-debug.service
+
+[Service]
+Type=oneshot
+ExecStart=-/usr/bin/systemctl start --no-block duranium-debug-console.socket duranium-debug-shell.socket duranium-debug-klog.socket duranium-debug-sshd.socket
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# The debug sockets are bound to usb0 (BindToDevice=), so systemd stops them
+# whenever the interface goes away, e.g. when the gadget is re-enumerated to
+# add a function. Start them again every time usb0 appears.
+SUBSYSTEM=="net", ACTION=="add", KERNEL=="usb0", TAG+="systemd", \
+  ENV{SYSTEMD_WANTS}+="duranium-debug-console.socket duranium-debug-shell.socket duranium-debug-klog.socket duranium-debug-sshd.socket"

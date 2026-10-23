@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Dedicated sshd for the Duranium USB debug layer, run in inetd mode (sshd -i)
+# from duranium-debug-sshd.socket, which listens on TCP 22 of the USB gadget
+# interface only. Its own host key keeps it apart from a production sshd the
+# user may run on the system. Installed as /usr/share/duranium-usb-debug/
+# sshd_config; /etc/duranium-usb-debug/sshd_config replaces it when present.
+#
+# SECURITY: this permits root login. It is meant for development images only.
+# See /usr/share/doc/duranium-usb-debug/README. Disable the whole layer with
+#   systemctl disable --now duranium-usb-debug.target
+# or ship a release image without the duranium-usb-debug package.
+PermitRootLogin yes
+PasswordAuthentication yes
+PubkeyAuthentication yes
+# Empty-password root login is NOT allowed; set a root password or install a
+# key before relying on SSH access (the telnet console needs no password).
+PermitEmptyPasswords no
+UsePAM no
+HostKey /etc/duranium-usb-debug/ssh_host_ed25519_key
+# Keys baked into a development image go to /usr/share/duranium-usb-debug
+# (read-only /usr); keys added at runtime to ~/.ssh/authorized_keys.
+AuthorizedKeysFile .ssh/authorized_keys /usr/share/duranium-usb-debug/authorized_keys
+Subsystem sftp internal-sftp

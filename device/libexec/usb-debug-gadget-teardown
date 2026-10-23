@@ -1,0 +1,16 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Tear down the debug NCM interface so it does not linger once the service is
+# stopped/masked (e.g. for a release image or when the user disables it).
+set -eu
+R=${USBDBG_ROOT:-}
+GADGET=$R/sys/kernel/config/usb_gadget/g_debug
+[ -d "$GADGET" ] || exit 0
+echo "" > "$GADGET/UDC" 2>/dev/null || true
+rm -f "$GADGET/configs/c.1/ncm.usb0" 2>/dev/null || true
+rmdir "$GADGET/configs/c.1/strings/0x409" 2>/dev/null || true
+rmdir "$GADGET/configs/c.1" 2>/dev/null || true
+rmdir "$GADGET/functions/ncm.usb0" 2>/dev/null || true
+rmdir "$GADGET/strings/0x409" 2>/dev/null || true
+rmdir "$GADGET" 2>/dev/null || true
+rm -f "$R/run/duranium-usb-debug.iface"

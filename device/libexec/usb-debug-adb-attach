@@ -1,0 +1,64 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Add an adb function (FunctionFS + adbd) to the USB debug gadget, next to
+# its NCM network function, so "adb shell", "adb push/pull" and
+# "adb logcat"-style access work from the host.
+#
+# The gadget (g_debug) is usually bound already, from the initrd, which stays
+# small and has no adbd. A function can only be added while the gadget is
+# unbound, so: unbind, add ffs.adb, mount FunctionFS, start adbd, wait until
+# adbd has written its USB descriptors (ep1 appears), bind again. The USB link
+# drops for about a second. If adbd does not come up, the adb function is
+# removed again and the gadget is re-bound with NCM only, so a broken adbd
+# never costs the debug network.
+set -eu
+
+# shellcheck source=/dev/null
+. "$(dirname "$0")"/usb-debug-config
+usbdbg_load
+
+GADGET=/sys/kernel/config/usb_gadget/g_debug
+FFS=/dev/usb-ffs/adb
+FUNC=$GADGET/functions/ffs.adb
+CONF=$GADGET/configs/c.1
+
+log() { echo "duranium-usb-debug-adb: $*"; }
+
+[ -d "$GADGET" ] || { log "no g_debug gadget, skipping"; exit 0; }
+[ -x /usr/bin/adbd ] || { log "adbd not installed, skipping"; exit 0; }
+[ -e "$CONF/ffs.adb" ] && { log "already attached"; exit 0; }
+
+udc=$(cat "$GADGET/UDC" 2>/dev/null || true)
+[ -n "$udc" ] || udc=$(usbdbg_udc) || { log "no UDC, skipping"; exit 0; }
+
+bind() {
+	echo "$udc" > "$GADGET/UDC"
+	iface=$(cat "$GADGET/functions/ncm.usb0/ifname" 2>/dev/null || true)
+	[ -n "$iface" ] && ip link set "$iface" up
+}
+
+echo "" > "$GADGET/UDC" 2>/dev/null || true
+
+mkdir -p "$FUNC"
+ln -sf "$FUNC" "$CONF/"
+mkdir -p "$FFS"
+mountpoint -q "$FFS" || mount -t functionfs adb "$FFS"
+
+systemctl start --no-block duranium-debug-adbd.service
+
+for _ in $(seq 1 50); do
+	[ -e "$FFS/ep1" ] && break
+	sleep 0.1
+done
+if [ ! -e "$FFS/ep1" ]; then
+	log "adbd did not register its endpoints, keeping NCM only"
+	systemctl stop --no-block duranium-debug-adbd.service || true
+	rm -f "$CONF/ffs.adb"
+	umount "$FFS" 2>/dev/null || true
+	rmdir "$FUNC" 2>/dev/null || true
+	bind
+	exit 0
+fi
+
+bind
+log "adb attached on $udc"

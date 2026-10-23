@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=Duranium USB debug layer: adbd (root shell and file transfer over adb)
+Documentation=file:///usr/share/doc/duranium-usb-debug/README
+ConditionKernelCommandLine=!duranium.usb_debug=0
+ConditionKernelCommandLine=!duranium.usb_debug_adb=0
+PartOf=duranium-usb-debug.target
+# Started by usb-debug-adb-attach once FunctionFS is mounted
+RequiresMountsFor=/dev/usb-ffs/adb
+
+[Service]
+ExecStart=/usr/bin/adbd
+Restart=on-failure
+RestartSec=2

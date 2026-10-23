@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Enabled by default in development images. A release image drops the whole
+# duranium-usb-debug package, or disables/masks the target:
+#   systemctl disable --now duranium-usb-debug.target
+enable duranium-usb-debug.target
+enable duranium-usb-debug.service
+enable duranium-debug-console.socket
+enable duranium-debug-shell.socket
+enable duranium-debug-sshd.socket
+enable duranium-debug-klog.socket
+enable duranium-debug-sockets.service

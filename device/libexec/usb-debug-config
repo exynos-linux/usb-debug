@@ -1,0 +1,74 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# usb-debug-config: the USB debug layer's settings, for its scripts and the
+# generator. Sourced (". usb-debug-config"), then call usbdbg_load.
+#
+# Settings are KEY=value lines (no shell code; quotes optional) in
+#   /usr/lib/duranium-usb-debug/conf.d/*.conf   (device packages)
+#   /etc/duranium-usb-debug/conf.d/*.conf       (the local admin, read last)
+# and on the kernel command line: duranium.usb_debug.udc=NAME.
+#
+#   UDC=           USB device controller (a name or shell glob from
+#                  /sys/class/udc), empty = the first one
+#   UDC_WAIT=10    seconds to wait for it to appear
+#   CONSOLE_PORT=23 SHELL_PORT=2323 SSH_PORT=22 KLOG_PORT=24
+#                  TCP ports on the USB interface; 0 = that service is off
+#   MANUFACTURER= PRODUCT= SERIAL=
+#                  the gadget's USB strings (empty = derived from the DT)
+#
+# USBDBG_ROOT (tests only) prefixes every path.
+
+# shellcheck disable=SC2034 # the settings are for the scripts that source this
+usbdbg_load() {
+	UDC='' UDC_WAIT=10
+	CONSOLE_PORT=23 SHELL_PORT=2323 SSH_PORT=22 KLOG_PORT=24
+	MANUFACTURER=postmarketOS PRODUCT='' SERIAL=''
+	_r=${USBDBG_ROOT:-}
+	for _f in "$_r"/usr/lib/duranium-usb-debug/conf.d/*.conf "$_r"/etc/duranium-usb-debug/conf.d/*.conf; do
+		[ -f "$_f" ] || continue
+		while IFS= read -r _l || [ -n "$_l" ]; do
+			case $_l in '' | '#'*) continue ;; esac
+			_k=${_l%%=*} _v=${_l#*=}
+			[ "$_k" != "$_l" ] || { echo "usb-debug: $_f: not KEY=value: $_l" >&2; continue; }
+			case $_v in
+				\"*\") _v=${_v#\"} _v=${_v%\"} ;;
+				\'*\') _v=${_v#\'} _v=${_v%\'} ;;
+			esac
+			case $_k in
+				UDC | UDC_WAIT | CONSOLE_PORT | SHELL_PORT | SSH_PORT | KLOG_PORT | \
+				MANUFACTURER | PRODUCT | SERIAL)
+					eval "$_k=\$_v" ;;
+				*) echo "usb-debug: $_f: unknown setting $_k" >&2 ;;
+			esac
+		done < "$_f"
+	done
+	_c=
+	read -r _c 2>/dev/null < "$_r"/proc/cmdline || true
+	for _w in $_c; do
+		case $_w in duranium.usb_debug.udc=*) UDC=${_w#*=} ;; esac
+	done
+	case $UDC_WAIT in '' | *[!0-9]*) UDC_WAIT=10 ;; esac
+	unset _r _f _l _k _v _w _c
+}
+
+# The first entry of the device tree's compatible list ("vendor,device")
+usbdbg_compatible() {
+	tr '\0' '\n' < "${USBDBG_ROOT:-}"/sys/firmware/devicetree/base/compatible 2>/dev/null | head -n 1
+}
+
+# The device tree's model, without its trailing NUL
+usbdbg_model() {
+	tr -d '\0' < "${USBDBG_ROOT:-}"/sys/firmware/devicetree/base/model 2>/dev/null
+}
+
+# Print the UDC to use (see UDC=), nothing if there is none (yet)
+usbdbg_udc() {
+	for _u in "${USBDBG_ROOT:-}"/sys/class/udc/*; do
+		[ -e "$_u" ] || continue
+		_u=${_u##*/}
+		# shellcheck disable=SC2254 # UDC may be a glob
+		case $_u in ${UDC:-*}) echo "$_u"; unset _u; return 0 ;; esac
+	done
+	unset _u
+	return 1
+}
