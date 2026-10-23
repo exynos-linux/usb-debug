@@ -1,22 +1,31 @@
 # SPDX-License-Identifier: GPL-2.0-only
-"""The device repository's public configuration (config.toml).
+"""Settings: the device repository's public configuration (config.toml).
 
 Read the way exynos-linux/device-template reads it: through the
 repository's own scripts/config ("scripts/config json", derived values
 filled in), so every tool agrees. Without that script, config.toml is read
-directly (Python 3.11+, tomllib); without a repository, the defaults below
-(the template's values) apply.
+directly. Without a repository, the device table (devices/<id>.toml in this
+tree, chosen with --device, $USB_DEBUG_DEVICE or the user config), then the
+defaults below (the template's values) apply.
 
 The repository is --repo / $USB_DEBUG_REPO, else the nearest directory
 above the current one with a config.toml that has a [console] or [device]
-table.
+table, else the user config's "repo".
+
+User config ($XDG_CONFIG_HOME/usb-debug/config.toml, written by
+install.sh --device / --repo):
+    device = "samsung-gtactive3wifi"
+    repo = "/home/me/src/samsung-gtactive3wifi"
 """
 import copy
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
+
+from . import ROOT
 
 DEFAULTS = {
     "device": {"id": "", "name": "", "codename": ""},
@@ -31,17 +40,73 @@ DEFAULTS = {
 }
 
 
-def _toml(path):
+def _value(v):
+    v = v.strip()
+    if v.startswith('"') and v.endswith('"') and len(v) >= 2:
+        return v[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+    if v.startswith("'") and v.endswith("'") and len(v) >= 2:
+        return v[1:-1]
+    if v in ("true", "false"):
+        return v == "true"
+    if v.startswith("["):
+        inner = v.strip("[]").strip()
+        return [_value(x) for x in re.findall(r'"[^"]*"|\'[^\']*\'|[^,\s]+', inner)] if inner else []
+    try:
+        return int(v, 0)
+    except ValueError:
+        return v
+
+
+def mini_toml(text):
+    """The TOML subset the config files use ([table], key = string, int,
+    bool, or a list of those, also over several lines), for Python < 3.11."""
+    data, table, pending = {}, None, None
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].strip() if '"' not in raw else re.sub(r'\s+#[^"]*$', "", raw).strip()
+        if pending is not None:
+            pending[1] += " " + line
+            if line.endswith("]"):
+                table[pending[0]] = _value(pending[1])
+                pending = None
+            continue
+        if not line:
+            continue
+        m = re.fullmatch(r"\[([A-Za-z0-9_.-]+)\]", line)
+        if m:
+            table = data
+            for part in m.group(1).split("."):
+                table = table.setdefault(part, {})
+            continue
+        if "=" not in line:
+            continue
+        k, v = (x.strip() for x in line.split("=", 1))
+        if table is None:
+            table = data
+        if v.startswith("[") and not v.endswith("]"):
+            pending = [k, v]
+            continue
+        table[k] = _value(v)
+    return data
+
+
+def read_toml(path):
     try:
         import tomllib
     except ImportError:  # Python < 3.11
-        try:
-            import tomli as tomllib
-        except ImportError:
-            print(f"usb-debug: cannot read {path} (needs Python 3.11+); using defaults", file=sys.stderr)
-            return {}
-    with open(path, "rb") as f:
-        return tomllib.load(f)
+        tomllib = None
+    if tomllib:
+        with open(path, "rb") as f:
+            return tomllib.load(f)
+    return mini_toml(Path(path).read_text())
+
+
+def user_config_path():
+    base = os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config"
+    return Path(base) / "usb-debug" / "config.toml"
+
+
+def device_file(device_id):
+    return ROOT / "devices" / f"{device_id}.toml"
 
 
 def _is_repo(d):
@@ -57,7 +122,7 @@ def _is_repo(d):
     return "[console]" in text or "[device]" in text
 
 
-def find_repo(explicit=None):
+def find_repo(explicit=None, user=None):
     if explicit:
         return Path(explicit).resolve()
     env = os.environ.get("USB_DEBUG_REPO")
@@ -67,6 +132,9 @@ def find_repo(explicit=None):
     for p in (d, *d.parents):
         if _is_repo(p):
             return p
+    r = (user or {}).get("repo")
+    if r and _is_repo(Path(r)):
+        return Path(r).resolve()
     return None
 
 
@@ -80,13 +148,28 @@ def _merge(base, over):
 
 
 class Config:
-    def __init__(self, repo=None):
-        self.repo = find_repo(repo)
+    def __init__(self, repo=None, device=None):
+        user = {}
+        up = user_config_path()
+        if up.is_file():
+            try:
+                user = read_toml(up)
+            except (OSError, ValueError) as e:
+                print(f"usb-debug: {up}: {e}", file=sys.stderr)
+        self.repo = find_repo(repo, user)
+        self.device = device or os.environ.get("USB_DEBUG_DEVICE") or user.get("device") or ""
         self.source = "defaults"
-        data = {}
+        self.data = copy.deepcopy(DEFAULTS)
         if self.repo:
-            data = self._load()
-        self.data = _merge(copy.deepcopy(DEFAULTS), data)
+            _merge(self.data, self._load())
+        elif self.device:
+            f = device_file(self.device)
+            if f.is_file():
+                _merge(self.data, read_toml(f))
+                self.source = str(f)
+            else:
+                print(f"usb-debug: no settings for device {self.device!r} in {f.parent}; using defaults",
+                      file=sys.stderr)
 
     def _load(self):
         script = self.repo / "scripts" / "config"
@@ -105,7 +188,7 @@ class Config:
         toml = self.repo / "config.toml"
         if toml.is_file():
             self.source = str(toml)
-            return _toml(toml)
+            return read_toml(toml)
         return {}
 
     def get(self, key, default=None):

@@ -19,7 +19,7 @@ see [docs/PROTOCOL.md](docs/PROTOCOL.md).
 ## Install the host tool
 
 ```sh
-curl -fsSL https://github.com/exynos-linux/usb-debug/releases/latest/download/setup.sh | sh
+curl -fsSL https://github.com/exynos-linux/usb-debug/releases/latest/download/install.sh | sh
 ```
 
 This installs into `~/.local/share/usb-debug/<version>` and links

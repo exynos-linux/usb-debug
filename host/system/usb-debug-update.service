@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0-only
+[Unit]
+Description=Update the usb-debug host tool (exynos-linux/usb-debug)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/usb-debug self-update --quiet

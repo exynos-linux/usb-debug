@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# exynos-linux/usb-debug (install.sh): the USB debug link of an exynos-linux
+# device, matched by the fixed host-side MAC of its gadget. IPv6 link-local
+# carries the console (fe80::57:aff:fe00:1); IPv4 10.42.7.1/24 shares this
+# PC's connection with the device (DHCP + NAT) when dnsmasq is installed.
+[connection]
+id=usb-debug
+uuid=@UUID@
+type=ethernet
+autoconnect=true
+autoconnect-priority=-10
+
+[ethernet]
+mac-address=02:57:0A:00:00:02
+
+[ipv4]
+method=@IPV4_METHOD@
+address1=10.42.7.1/24
+never-default=true
+
+[ipv6]
+method=link-local
+addr-gen-mode=eui64

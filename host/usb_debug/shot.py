@@ -71,10 +71,16 @@ def shot(cfg, a):
             if not r.startswith("0x"):
                 raise link.LinkError(f"peek {a.base_reg}: {r}")
             base = int(r, 16)
-        if a.size:
-            w, h = (int(x) for x in a.size.lower().split("x"))
-        else:
-            w, h = panel_size(c)
+        size = a.size
+        if not size:
+            try:
+                w, h = panel_size(c)
+            except link.LinkError:
+                size = cfg.get("console.panel")  # the device table's, e.g. 1200x1920
+                if not size:
+                    raise
+        if size:
+            w, h = (int(x) for x in size.lower().split("x"))
         n = w * h * 4
         data = bytearray()
         c.stream(a.src or SCANOUT, n, data.extend, label="screen", base=base, whole=False)

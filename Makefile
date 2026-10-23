@@ -4,7 +4,7 @@
 #   make install DESTDIR=...   the device layer (duranium-usb-debug), as the
 #                              APKBUILD packages it
 #   make install-host PREFIX=~/.local
-#                              the host tool (setup.sh does this from a release)
+#                              the host tool (install.sh does this from a release)
 #   make check                 the tests (tests/)
 #   make dist                  usb-debug-$(VERSION).tar.gz from git HEAD
 #
@@ -59,7 +59,7 @@ install-device: console
 
 install-host:
 	install -d $(DESTDIR)$(PREFIX)/share/usb-debug/$(VERSION) $(DESTDIR)$(PREFIX)/bin
-	cp -R host console tools docs VERSION $(DESTDIR)$(PREFIX)/share/usb-debug/$(VERSION)/
+	cp -R host console tools docs devices VERSION $(DESTDIR)$(PREFIX)/share/usb-debug/$(VERSION)/
 	ln -sfn $(VERSION) $(DESTDIR)$(PREFIX)/share/usb-debug/current
 	ln -sf ../share/usb-debug/current/host/usb-debug $(DESTDIR)$(PREFIX)/bin/usb-debug
 

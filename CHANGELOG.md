@@ -26,6 +26,6 @@ one device.
 - **Host tool** `usb-debug`: one command for wait, cmd, put, get, sh,
   shell, klog, ssh, shot, login, unlock, checkpw, flashd, notify,
   hot-modules, config, version, self-update, src and aport. It reads
-  `config.toml` through the device repository's `scripts/config`. `setup.sh`
-  installs it, and device repositories pin a version with
+  `config.toml` through the device repository's `scripts/config`. `install.sh`
+  installs it (the host tool, udev rules and the USB link profile), and device repositories pin a version with
   `contrib/device-shim.sh`.

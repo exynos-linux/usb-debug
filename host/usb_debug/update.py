@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Installed releases and self-update (GitHub Releases).
 
-Layout (what setup.sh makes):
+Layout (what install.sh makes):
     $XDG_DATA_HOME/usb-debug/<version>/   one release: the source tree, plus
         APKBUILD.release                  the aport with its checksum
         bin/aarch64/                      prebuilt device binaries
@@ -138,13 +138,15 @@ def self_update(a):
         print(f"usb-debug: cannot reach GitHub: {e}", file=sys.stderr)
         return 1
     newer = vtuple(want) > vtuple(VERSION)
+    if getattr(a, "quiet", False) and not newer and not a.to:
+        return 0
     if a.check:
         print(f"usb-debug {want} is available (this is {VERSION})" if newer
               else f"usb-debug {VERSION} is up to date")
         return 0
     if root is None:
         print(f"usb-debug: running from {ROOT}, not an installed release: update it with git, "
-              f"or install one with setup.sh (docs/INSTALL.md)", file=sys.stderr)
+              f"or install one with install.sh (README.md)", file=sys.stderr)
         return 1
     if not newer and not a.to:
         print(f"usb-debug {VERSION} is up to date")

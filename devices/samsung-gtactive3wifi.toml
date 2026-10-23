@@ -1,0 +1,27 @@
+# Settings the host tool uses for this device outside its repository
+# (install.sh --device=samsung-gtactive3wifi, usb-debug --device ...).
+# Inside the repository its own config.toml wins. Same keys as config.toml.
+
+[device]
+id = "samsung-gtactive3wifi"
+vendor = "samsung"
+codename = "gtactive3wifi"
+name = "Samsung Galaxy Tab Active3 (SM-T570)"
+soc = "exynos9810"
+
+[console]
+port = 23
+shell_port = 2323
+ssh_port = 22
+klog_port = 24
+# the USB link (the same on every exynos-linux device)
+address = "fe80::57:aff:fe00:1"
+host_mac = "02:57:0a:00:00:02"
+# panel size for "usb-debug shot" when the device cannot tell
+panel = "1200x1920"
+
+[installer]
+download_usb = "04e8:685d"
+flash_allow = ["BOOT", "RECOVERY"]
+boot_partition = "BOOT"
+recovery_partition = "RECOVERY"

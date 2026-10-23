@@ -26,7 +26,7 @@ jobs:
           [ "$v" = "$a" ] || { echo "::error::VERSION $v but APKBUILD pkgver $a"; exit 1; }
           grep -q "usb-debug-$v.tar.gz" pmos/aports/main/duranium-usb-debug/APKBUILD
       - name: shellcheck
-        run: shellcheck -s sh setup.sh contrib/device-shim.sh device/libexec/* device/generator/*
+        run: shellcheck -s sh install.sh contrib/device-shim.sh device/libexec/* device/generator/*
       - name: Python
         run: python3 -m py_compile host/usb-debug host/usb_debug/*.py tests/*.py
 

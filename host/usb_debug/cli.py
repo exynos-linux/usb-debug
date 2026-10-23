@@ -3,8 +3,11 @@
 
 The device is the bring-up Linux (usb-debug's nolibc init) or a development
 image (the duranium-usb-debug package). Settings come from the device
-repository's config.toml (see config.py); run it inside the repository or
-pass --repo.
+repository's config.toml (see config.py): run it inside the repository,
+pass --repo, or name the device (--device, or install.sh --device).
+
+Installed as "tab" too. "tab" also takes console commands directly
+("tab dmesg", "tab peek 0x1406080c"), like the old scripts/tab.
 """
 import argparse
 import io
@@ -40,7 +43,7 @@ def c_wait(cfg, a):
     for _ in range(a.seconds):
         t0 = time.time()
         try:
-            addr = link.address()
+            addr = link.address(cfg)
             if a.console or not ping:
                 with link.Console(addr, port, timeout=1):
                     pass
@@ -49,7 +52,7 @@ def c_wait(cfg, a):
                 ok = subprocess.run([ping, "-6", "-c1", "-W1", addr], stdout=subprocess.DEVNULL,
                                     stderr=subprocess.DEVNULL).returncode == 0
             if ok:
-                print(f"up on {link.iface() or addr}")
+                print(f"up on {link.iface(cfg) or addr}")
                 return 0
         except link.LinkError:
             pass
@@ -59,7 +62,7 @@ def c_wait(cfg, a):
 
 
 def c_addr(cfg, a):
-    print(link.address())
+    print(link.address(cfg))
 
 
 def c_cmd(cfg, a):
@@ -164,13 +167,13 @@ def c_sh(cfg, a):
 
 def c_shell(cfg, a):
     from .telnet import interact
-    return interact(link.address(), int(cfg.get("console.shell_port")))
+    return interact(link.address(cfg), int(cfg.get("console.shell_port")))
 
 
 def c_klog(cfg, a):
     port = int(cfg.get("console.klog_port", 24))
     try:
-        s = socket.create_connection((link.address(), port), timeout=10)
+        s = socket.create_connection((link.address(cfg), port), timeout=10)
     except OSError as e:
         return die(f"cannot reach the kernel log at port {port}: {e}")
     s.settimeout(None)
@@ -191,7 +194,7 @@ def c_ssh(cfg, a):
     # every device has the same address, so do not pin host keys
     argv = [ssh, "-p", str(cfg.get("console.ssh_port", 22)), "-o", "StrictHostKeyChecking=no",
             "-o", "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR",
-            f"{a.user}@{link.address()}", *a.args]
+            f"{a.user}@{link.address(cfg)}", *a.args]
     os.execv(ssh, argv)
 
 
@@ -288,11 +291,13 @@ def c_aport(cfg, a):
     return aport(a)
 
 
-def parser():
-    p = argparse.ArgumentParser(prog="usb-debug", description=__doc__.split("\n\n")[0],
+def parser(prog="usb-debug"):
+    p = argparse.ArgumentParser(prog=prog, description=__doc__.split("\n\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter,
                                 epilog=f"Docs: https://github.com/{REPO}#readme")
     p.add_argument("--repo", help="the device repository (default: found from the current directory)")
+    p.add_argument("--device", help="vendor-codename whose settings to use outside a repository "
+                   "(default: install.sh --device)")
     p.add_argument("--addr", help="device address (default fe80::57:aff:fe00:1%%<cdc_ncm interface>)")
     p.add_argument("--port", type=int, help="console port (default: config.toml console.port)")
     p.add_argument("-V", "--version", action="version", version=f"usb-debug {VERSION}")
@@ -370,6 +375,7 @@ def parser():
     s.add_argument("--device", action="store_true", help="also ask the device's console")
     s = cmd("self-update", c_self_update, "update to the newest release (GitHub Releases)")
     s.add_argument("--check", action="store_true", help="only say whether there is one")
+    s.add_argument("--quiet", action="store_true", help="say nothing when up to date (the update timer)")
     s.add_argument("--version", dest="to", metavar="X.Y.Z", help="install this release instead")
     cmd("src", c_src, "print where this version's files are (console/ for the bring-up init)")
     s = cmd("aport", c_aport, "write this version's released APKBUILD into a directory")
@@ -377,15 +383,38 @@ def parser():
     return p
 
 
-def main(argv=None):
-    p = parser()
+# global options that take a value (for the "tab" shorthand below)
+GLOBAL_VALUE_OPTS = ("--repo", "--device", "--addr", "--port")
+
+
+def tab_argv(p, argv):
+    """"tab dmesg" = "tab cmd dmesg": a first word that is no subcommand is a
+    console command, as with the old scripts/tab."""
+    sub = next(a for a in p._actions if isinstance(a, argparse._SubParsersAction))
+    i = 0
+    while i < len(argv) and argv[i].startswith("-"):
+        if argv[i] in GLOBAL_VALUE_OPTS:
+            i += 1
+        i += 1
+    if i < len(argv) and argv[i] not in sub.choices:
+        argv = argv[:i] + ["cmd"] + argv[i:]
+    return argv
+
+
+def main(argv=None, prog=None):
+    prog = prog or os.path.basename(sys.argv[0])
+    prog = "tab" if prog == "tab" else "usb-debug"
+    p = parser(prog)
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if prog == "tab":
+        argv = tab_argv(p, argv)
     a = p.parse_args(argv)
     if not getattr(a, "func", None):
         p.print_help()
         return 2
     if a.addr:
         os.environ["USB_DEBUG_ADDR"] = a.addr
-    cfg = Config(a.repo)
+    cfg = Config(a.repo, a.device)
     if a.port:
         cfg.data["console"]["port"] = a.port
     try:

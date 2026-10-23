@@ -9,7 +9,7 @@
 The `release` workflow then:
 
 - checks that the tag matches `VERSION`,
-- makes `usb-debug-X.Y.Z.tar.gz` (`git archive`) and `setup.sh` with the
+- makes `usb-debug-X.Y.Z.tar.gz` (`git archive`) and `install.sh` with the
   version filled in,
 - fills the APKBUILD's `sha512sums` for that tarball and builds the
   packages from it on Alpine edge (x86_64 and aarch64),

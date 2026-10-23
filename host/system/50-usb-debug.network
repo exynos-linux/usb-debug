@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# exynos-linux/usb-debug (install.sh): the USB debug link of an exynos-linux
+# device for systemd-networkd. IPv6 link-local carries the console
+# (fe80::57:aff:fe00:1); IPv4 10.42.7.1/24 shares this PC's connection with
+# the device (DHCP + NAT).
+[Match]
+MACAddress=02:57:0a:00:00:02
+
+[Network]
+Address=10.42.7.1/24
+LinkLocalAddressing=ipv6
+IPv6AcceptRA=no
+DHCPServer=yes
+IPMasquerade=ipv4
+
+[DHCPServer]
+PoolOffset=10
+PoolSize=100
+EmitDNS=yes

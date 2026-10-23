@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# install.sh --auto-update: look for a new usb-debug release once a day.
+[Unit]
+Description=Daily update check of the usb-debug host tool
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=2h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

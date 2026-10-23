@@ -10,7 +10,7 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 ver=$(tr -d ' \n' < "$repo/.usb-debug-version")
 dir=${XDG_DATA_HOME:-$HOME/.local/share}/usb-debug/$ver
 if [ ! -x "$dir/host/usb-debug" ]; then
-	url=https://github.com/exynos-linux/usb-debug/releases/download/v$ver/setup.sh
+	url=https://github.com/exynos-linux/usb-debug/releases/download/v$ver/install.sh
 	if command -v curl > /dev/null; then
 		curl -fsSL "$url" | sh -s -- --version "$ver" --no-link >&2
 	else

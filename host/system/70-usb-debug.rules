@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# exynos-linux/usb-debug (install.sh): give the logged-in user access to
+# Samsung's Download mode (heimdall, "usb-debug flashd") and to the USB
+# debug gadget of the bring-up Linux and development images.
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="04e8", ATTR{idProduct}=="685d", TAG+="uaccess"
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="1d6b", ATTR{idProduct}=="0104", TAG+="uaccess"

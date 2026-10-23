@@ -34,18 +34,19 @@ def _read(path):
         return ""
 
 
-def iface():
+def iface(cfg=None):
     """The host interface of the device's USB link, or None."""
     env = os.environ.get("USB_DEBUG_IFACE")
     if env:
         return env
+    mac = (cfg.get("console.host_mac") if cfg else None) or HOST_MAC
     base = Path("/sys/class/net")
     try:
         names = sorted(p.name for p in base.iterdir())
     except OSError:
         return None
     for n in names:
-        if _read(base / n / "address").lower() == HOST_MAC:
+        if _read(base / n / "address").lower() == mac.lower():
             return n
     for n in names:
         try:
@@ -57,14 +58,14 @@ def iface():
     return None
 
 
-def address():
+def address(cfg=None):
     env = os.environ.get("USB_DEBUG_ADDR")
     if env:
         return env
-    i = iface()
+    i = iface(cfg)
     if not i:
         raise LinkError("device USB network not present (no cdc_ncm interface)")
-    return f"{LL}%{i}"
+    return f"{(cfg.get('console.address') if cfg else None) or LL}%{i}"
 
 
 @contextlib.contextmanager
@@ -208,4 +209,4 @@ class Console:
 
 
 def connect(cfg, port=None, timeout=10):
-    return Console(address(), port or int(cfg.get("console.port")), timeout=timeout)
+    return Console(address(cfg), port or int(cfg.get("console.port")), timeout=timeout)
