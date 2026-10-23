@@ -136,7 +136,8 @@ jobs:
             cp dist/usb-debug-*.tar.gz /var/cache/distfiles/
             cp -r pmos/aports/main/duranium-usb-debug /home/builder/aport
             chown -R builder /home/builder/aport
-            su builder -c "abuild-keygen -a -i -n -q && cd ~/aport && abuild checksum && abuild -r"
+            # REPODEST: newer abuild defaults to ~/.local/share/abuild
+            su builder -c "abuild-keygen -a -i -n -q && cd ~/aport && abuild checksum && REPODEST=/home/builder/packages abuild -r"
             mkdir -p /w/apk && cp -r /home/builder/packages/* /w/apk/
             # the APKBUILD with the checksum of this tarball, for the release
             cp /home/builder/aport/APKBUILD /w/apk/APKBUILD
